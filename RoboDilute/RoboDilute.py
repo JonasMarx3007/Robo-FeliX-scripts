@@ -10,6 +10,11 @@ MIN_CONC_LIMIT = 0.33
 MAX_CONC_LIMIT = 20.0
 
 
+def resource_path(relative_path: str) -> str:
+    base_path = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    return os.path.join(base_path, relative_path)
+
+
 def generate_plate_positions(rows=8, cols=12):
     row_labels = list(string.ascii_uppercase[:rows])
     col_labels = list(range(1, cols + 1))
@@ -18,28 +23,47 @@ def generate_plate_positions(rows=8, cols=12):
 
 def alert_and_exit(message, title="Info"):
     root = Tk()
+    root.title("SP3 Calculator")
+    try:
+        root.iconbitmap(resource_path("dilute.ico"))
+    except Exception:
+        pass
     root.withdraw()
-    messagebox.showinfo(title, message)
+    messagebox.showinfo(title, message, parent=root)
+    root.destroy()
     sys.exit(0)
 
 
 def error_and_exit(message, title="Error"):
     root = Tk()
+    root.title("SP3 Calculator")
+    try:
+        root.iconbitmap(resource_path("dilute.ico"))
+    except Exception:
+        pass
     root.withdraw()
-    messagebox.showerror(title, message)
+    messagebox.showerror(title, message, parent=root)
+    root.destroy()
     sys.exit(1)
 
 
 def process_plate_excel():
     root = Tk()
+    root.title("SP3 Calculator")
+    try:
+        root.iconbitmap(resource_path("dilute.ico"))
+    except Exception:
+        pass
     root.withdraw()
 
     file_path = filedialog.askopenfilename(
-        title="Select an Excel plate file",
+        title="SP3 Calculator",
         filetypes=[("Excel files", "*.xlsx *.xls")]
     )
     if not file_path:
-        alert_and_exit("No file selected.", "Cancelled")
+        messagebox.showinfo("Cancelled", "No file selected.", parent=root)
+        root.destroy()
+        sys.exit(0)
 
     try:
         df = pd.read_excel(file_path)
@@ -55,24 +79,32 @@ def process_plate_excel():
         invalid_low_conc = df_long[df_long['org_con'] < MIN_CONC_LIMIT]
         if not invalid_low_conc.empty:
             bad_wells = ", ".join(invalid_low_conc['org_pos'].tolist())
-            error_and_exit(
+            messagebox.showerror(
+                "Lower Concentration Limit Error",
                 f"Concentration too low (< {MIN_CONC_LIMIT} µg/µl) in wells:\n{bad_wells}",
-                "Lower Concentration Limit Error"
+                parent=root
             )
+            root.destroy()
+            sys.exit(1)
 
         invalid_high_conc = df_long[df_long['org_con'] > MAX_CONC_LIMIT]
         if not invalid_high_conc.empty:
             bad_wells = ", ".join(invalid_high_conc['org_pos'].tolist())
-            error_and_exit(
+            messagebox.showerror(
+                "Upper Concentration Limit Error",
                 f"Concentration too high (> {MAX_CONC_LIMIT} µg/µl) in wells:\n{bad_wells}",
-                "Upper Concentration Limit Error"
+                parent=root
             )
+            root.destroy()
+            sys.exit(1)
 
         df_long['buffer_vol'] = TARGET_TOTAL_VOL_UL - df_long['sample_vol']
 
         plate_positions = generate_plate_positions()
         if len(df_long) > len(plate_positions):
-            error_and_exit(f"Too many samples ({len(df_long)}).", "Plate Overflow")
+            messagebox.showerror("Plate Overflow", f"Too many samples ({len(df_long)}).", parent=root)
+            root.destroy()
+            sys.exit(1)
 
         df_long['new_pos'] = plate_positions[:len(df_long)]
 
@@ -91,24 +123,26 @@ def process_plate_excel():
         headers = output_df.columns.tolist()
         lines = ['; '.join(headers)]
         for _, row in output_df.iterrows():
-            lines.append(
-                f"{row['org_pos']}; {row['new_pos']}; {row['org_con']}; {row['sample_vol']}; {row['buffer_vol']}")
+            lines.append(f"{row['org_pos']}; {row['new_pos']}; {row['org_con']}; {row['sample_vol']}; {row['buffer_vol']}")
 
         with open(main_file_path, 'w') as f:
             f.write('\n'.join(lines))
 
         columns_to_export = ['org_pos', 'new_pos', 'sample_vol', 'buffer_vol']
-
         for col in columns_to_export:
             col_file_path = os.path.join(output_dir, f"{col}.txt")
             content = '\n'.join(output_df[col].astype(str).tolist())
             with open(col_file_path, 'w') as f:
                 f.write(content)
 
-        alert_and_exit(f"Success! Output folder created at:\n{output_dir}", "Success")
+        messagebox.showinfo("Success", f"Success! Output folder created at:\n{output_dir}", parent=root)
+        root.destroy()
+        sys.exit(0)
 
     except Exception as e:
-        error_and_exit(f"An error occurred:\n{str(e)}", "System Error")
+        messagebox.showerror("System Error", f"An error occurred:\n{str(e)}", parent=root)
+        root.destroy()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
